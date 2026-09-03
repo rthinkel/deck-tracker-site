@@ -1,2 +1,3 @@
 [build]
-  publish = "."
+  command = "bash ./build-site.sh"
+  publish = "dist-site"
