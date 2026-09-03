@@ -61,12 +61,7 @@ jobs:
             exit 1
           fi
 
-          # Allow DeckTracker's complete splash animation and post-animation
-          # hold to finish before any UI input or screenshot is attempted.
           sleep 20
-
-          # Default cursor field is Note. Move once to Instrument so the Y
-          # shortcut opens the contextual Instrument window.
           xdotool key --window "$WID" Right
           sleep 0.5
           scrot -o "$GITHUB_WORKSPACE/assets/screenshots/tracker.png"
@@ -75,7 +70,6 @@ jobs:
           sleep 1
           scrot -o "$GITHUB_WORKSPACE/assets/screenshots/instrument.png"
 
-          # Activate the visible EFFECTS button in the BASIC instrument window.
           xdotool mousemove --window "$WID" 860 585 click 1
           sleep 1
           scrot -o "$GITHUB_WORKSPACE/assets/screenshots/effects.png"
@@ -95,10 +89,18 @@ jobs:
           PY
 
       - name: Commit corrected screenshots
+        shell: bash
         run: |
+          set -euxo pipefail
           rm -f .capture-screenshots assets/screenshots/.gitkeep assets/screenshots/README.txt
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add assets/screenshots .capture-screenshots
           git commit -m 'Replace splash captures with DeckTracker screenshots'
-          git push
+          for attempt in 1 2 3 4 5; do
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            sleep $((attempt * 3))
+          done
+          exit 1
