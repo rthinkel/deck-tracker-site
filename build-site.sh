@@ -15,11 +15,21 @@ trap cleanup EXIT
 rm -rf "$OUT"
 mkdir -p "$OUT"
 
-# Copy the website source into an isolated publish directory. Keeping build
-# output out of the repository root prevents updater artifacts from becoming
-# source-controlled binary history.
-cp "$ROOT/index.html" "$ROOT/styles.css" "$OUT/"
-cp -R "$ROOT/assets" "$OUT/"
+# Copy the static website into an isolated publish directory while leaving
+# build-only files and updater payloads out of source control. This also means
+# future static files added to the repository are deployed automatically.
+(
+  cd "$ROOT"
+  tar \
+    --exclude='./.git' \
+    --exclude='./dist-site' \
+    --exclude='./build-site.sh' \
+    --exclude='./netlify.toml' \
+    --exclude='./latest.json' \
+    --exclude='./decktracker' \
+    --exclude='./RELEASE_NOTES.md' \
+    -cf - .
+) | tar -C "$OUT" -xf -
 
 # A repository-driven website deployment must never erase the updater payload
 # already serving DeckTracker clients. Pull the current production manifest and
