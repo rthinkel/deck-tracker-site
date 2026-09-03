@@ -21,7 +21,7 @@ jobs:
       - name: Install screenshot tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb xdotool scrot
+          sudo apt-get install -y xvfb xdotool scrot openbox
 
       - name: Capture DeckTracker views
         shell: bash
@@ -38,12 +38,16 @@ jobs:
           XVFB_PID=$!
           export DISPLAY=:99
           sleep 1
+          openbox >/tmp/openbox.log 2>&1 &
+          OPENBOX_PID=$!
+          sleep 1
 
           cd /tmp/decktracker-work
           HOME=/tmp/decktracker-home SDL_AUDIODRIVER=dummy /tmp/decktracker >/tmp/decktracker.log 2>&1 &
           APP_PID=$!
           cleanup() {
             kill "$APP_PID" 2>/dev/null || true
+            kill "$OPENBOX_PID" 2>/dev/null || true
             kill "$XVFB_PID" 2>/dev/null || true
           }
           trap cleanup EXIT
@@ -61,34 +65,39 @@ jobs:
             exit 1
           fi
 
-          xdotool windowactivate --sync "$WID" || true
-          sleep 7
+          xdotool windowactivate --sync "$WID"
+          xdotool windowfocus --sync "$WID"
+          sleep 8
           scrot -o "$GITHUB_WORKSPACE/assets/screenshots/tracker.png"
 
-          xdotool key --window "$WID" y
-          sleep 0.6
+          xdotool key --clearmodifiers y
+          sleep 0.8
           scrot -o "$GITHUB_WORKSPACE/assets/screenshots/instrument.png"
 
-          xdotool key --window "$WID" Up
+          xdotool key --clearmodifiers Up
           sleep 0.2
-          xdotool key --window "$WID" Return
-          sleep 0.6
+          xdotool key --clearmodifiers Return
+          sleep 0.8
           scrot -o "$GITHUB_WORKSPACE/assets/screenshots/effects.png"
 
           cd "$GITHUB_WORKSPACE"
           python3 - <<'PY'
+          import hashlib
           import struct
           from pathlib import Path
 
+          hashes = []
           for name in ('tracker.png', 'instrument.png', 'effects.png'):
               path = Path('assets/screenshots') / name
               data = path.read_bytes()
               assert data[:8] == b'\x89PNG\r\n\x1a\n', f'{name}: invalid PNG signature'
               width, height = struct.unpack('>II', data[16:24])
               assert (width, height) == (1280, 800), f'{name}: unexpected size {(width, height)}'
+              hashes.append(hashlib.sha256(data).hexdigest())
+          assert len(set(hashes)) == 3, f'screenshots are not distinct: {hashes}'
           PY
 
-      - name: Replace screenshot placeholders
+      - name: Update site screenshot section
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -152,5 +161,5 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add index.html styles.css assets/screenshots .capture-screenshots
-          git commit -m 'Add DeckTracker software screenshots'
+          git commit -m 'Refresh DeckTracker software screenshots'
           git push
