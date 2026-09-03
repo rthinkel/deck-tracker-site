@@ -122,18 +122,14 @@ code {
   display: grid;
   gap: 1.5rem;
 }
-.screenshot-placeholder { margin: 0; }
-.screenshot-placeholder__frame {
-  display: grid;
-  place-items: center;
-  aspect-ratio: 16 / 10;
+.screenshot { margin: 0; }
+.screenshot img {
+  display: block;
   width: 100%;
+  height: auto;
   border: 1px solid var(--line);
-  background: #f4f4f4;
-  color: var(--muted);
-  font-size: .9rem;
 }
-.screenshot-placeholder figcaption {
+.screenshot figcaption {
   margin-top: .4rem;
   color: var(--muted);
   font-size: .9rem;
