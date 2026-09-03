@@ -21,7 +21,7 @@ jobs:
       - name: Install screenshot tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb xdotool scrot openbox
+          sudo apt-get install -y xvfb xdotool scrot
 
       - name: Capture DeckTracker views
         shell: bash
@@ -38,16 +38,12 @@ jobs:
           XVFB_PID=$!
           export DISPLAY=:99
           sleep 1
-          openbox >/tmp/openbox.log 2>&1 &
-          OPENBOX_PID=$!
-          sleep 1
 
           cd /tmp/decktracker-work
           HOME=/tmp/decktracker-home SDL_AUDIODRIVER=dummy /tmp/decktracker >/tmp/decktracker.log 2>&1 &
           APP_PID=$!
           cleanup() {
             kill "$APP_PID" 2>/dev/null || true
-            kill "$OPENBOX_PID" 2>/dev/null || true
             kill "$XVFB_PID" 2>/dev/null || true
           }
           trap cleanup EXIT
@@ -65,19 +61,24 @@ jobs:
             exit 1
           fi
 
-          xdotool windowactivate --sync "$WID"
-          xdotool windowfocus --sync "$WID"
-          sleep 8
+          # DeckTracker intentionally holds its splash after the animation.
+          # Give the complete startup sequence ample time to finish before any
+          # website capture or UI input is attempted.
+          sleep 20
+
           scrot -o "$GITHUB_WORKSPACE/assets/screenshots/tracker.png"
 
-          xdotool key --clearmodifiers y
-          sleep 0.8
+          xdotool key --window "$WID" y
+          sleep 1
           scrot -o "$GITHUB_WORKSPACE/assets/screenshots/instrument.png"
 
-          xdotool key --clearmodifiers Up
-          sleep 0.2
-          xdotool key --clearmodifiers Return
-          sleep 0.8
+          # In the instrument window, move to the EFFECTS control and activate it.
+          # The current BASIC instrument layout reaches EFFECTS by moving upward
+          # once from the initial ENGINE field, then activating.
+          xdotool key --window "$WID" Up
+          sleep 0.25
+          xdotool key --window "$WID" Return
+          sleep 1
           scrot -o "$GITHUB_WORKSPACE/assets/screenshots/effects.png"
 
           cd "$GITHUB_WORKSPACE"
@@ -107,25 +108,25 @@ jobs:
           start = html.index('      <section class="page-section" id="screenshots"')
           end = html.index('      <section class="page-section" id="github"', start)
           section = '''      <section class="page-section" id="screenshots" aria-labelledby="screenshots-heading">
-                <h2 id="screenshots-heading">Screenshots</h2>
+        <h2 id="screenshots-heading">Screenshots</h2>
 
-                <div class="screenshot-list">
-                  <figure class="screenshot">
-                    <img src="/assets/screenshots/tracker.png" alt="DeckTracker tracker view" width="1280" height="800" loading="lazy">
-                    <figcaption>Tracker view</figcaption>
-                  </figure>
-                  <figure class="screenshot">
-                    <img src="/assets/screenshots/instrument.png" alt="DeckTracker instrument editor" width="1280" height="800" loading="lazy">
-                    <figcaption>Instrument editing</figcaption>
-                  </figure>
-                  <figure class="screenshot">
-                    <img src="/assets/screenshots/effects.png" alt="DeckTracker instrument effects view" width="1280" height="800" loading="lazy">
-                    <figcaption>Effects</figcaption>
-                  </figure>
-                </div>
-              </section>
+        <div class="screenshot-list">
+          <figure class="screenshot">
+            <img src="/assets/screenshots/tracker.png" alt="DeckTracker tracker view" width="1280" height="800" loading="lazy">
+            <figcaption>Tracker view</figcaption>
+          </figure>
+          <figure class="screenshot">
+            <img src="/assets/screenshots/instrument.png" alt="DeckTracker instrument editor" width="1280" height="800" loading="lazy">
+            <figcaption>Instrument editing</figcaption>
+          </figure>
+          <figure class="screenshot">
+            <img src="/assets/screenshots/effects.png" alt="DeckTracker instrument effects view" width="1280" height="800" loading="lazy">
+            <figcaption>Effects</figcaption>
+          </figure>
+        </div>
+      </section>
 
-          '''
+'''
           html_path.write_text(html[:start] + section + html[end:])
 
           css_path = Path('styles.css')
@@ -133,23 +134,23 @@ jobs:
           css_start = css.index('.screenshot-list {')
           css_end = css.index('.site-footer', css_start)
           screenshot_css = '''.screenshot-list {
-            display: grid;
-            gap: 1.5rem;
-          }
-          .screenshot { margin: 0; }
-          .screenshot img {
-            display: block;
-            width: 100%;
-            height: auto;
-            border: 1px solid var(--line);
-          }
-          .screenshot figcaption {
-            margin-top: .4rem;
-            color: var(--muted);
-            font-size: .9rem;
-          }
+  display: grid;
+  gap: 1.5rem;
+}
+.screenshot { margin: 0; }
+.screenshot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+}
+.screenshot figcaption {
+  margin-top: .4rem;
+  color: var(--muted);
+  font-size: .9rem;
+}
 
-          '''
+'''
           css_path.write_text(css[:css_start] + screenshot_css + css[css_end:])
           PY
 
@@ -161,5 +162,5 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add index.html styles.css assets/screenshots .capture-screenshots
-          git commit -m 'Refresh DeckTracker software screenshots'
+          git commit -m 'Refresh DeckTracker software screenshots after splash'
           git push
