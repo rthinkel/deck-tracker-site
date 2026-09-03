@@ -61,16 +61,22 @@ jobs:
             exit 1
           fi
 
+          # Allow DeckTracker's complete splash animation and post-animation
+          # hold to finish before any UI input or screenshot is attempted.
           sleep 20
+
+          # Default cursor field is Note. Move once to Instrument so the Y
+          # shortcut opens the contextual Instrument window.
+          xdotool key --window "$WID" Right
+          sleep 0.5
           scrot -o "$GITHUB_WORKSPACE/assets/screenshots/tracker.png"
 
           xdotool key --window "$WID" y
           sleep 1
           scrot -o "$GITHUB_WORKSPACE/assets/screenshots/instrument.png"
 
-          xdotool key --window "$WID" Up
-          sleep 0.25
-          xdotool key --window "$WID" Return
+          # Activate the visible EFFECTS button in the BASIC instrument window.
+          xdotool mousemove --window "$WID" 860 585 click 1
           sleep 1
           scrot -o "$GITHUB_WORKSPACE/assets/screenshots/effects.png"
 
