@@ -1,0 +1,156 @@
+name: Capture DeckTracker screenshots
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .capture-screenshots
+
+permissions:
+  contents: write
+
+jobs:
+  capture:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out site repository
+        uses: actions/checkout@v4
+
+      - name: Install screenshot tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb xdotool scrot
+
+      - name: Capture DeckTracker views
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl --fail --location --silent --show-error --retry 8 --retry-delay 3 \
+            -H 'Cache-Control: no-cache' \
+            "https://decktracker.r0hi.xyz/decktracker?capture=$GITHUB_SHA" \
+            -o /tmp/decktracker
+          chmod +x /tmp/decktracker
+
+          mkdir -p assets/screenshots /tmp/decktracker-home /tmp/decktracker-work
+          Xvfb :99 -screen 0 1280x800x24 -nolisten tcp >/tmp/xvfb.log 2>&1 &
+          XVFB_PID=$!
+          export DISPLAY=:99
+          sleep 1
+
+          cd /tmp/decktracker-work
+          HOME=/tmp/decktracker-home SDL_AUDIODRIVER=dummy /tmp/decktracker >/tmp/decktracker.log 2>&1 &
+          APP_PID=$!
+          cleanup() {
+            kill "$APP_PID" 2>/dev/null || true
+            kill "$XVFB_PID" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          WID=""
+          for _ in $(seq 1 60); do
+            WID="$(xdotool search --onlyvisible --name 'DeckTracker' 2>/dev/null | head -n1 || true)"
+            if [[ -n "$WID" ]]; then
+              break
+            fi
+            sleep 0.25
+          done
+          if [[ -z "$WID" ]]; then
+            cat /tmp/decktracker.log || true
+            exit 1
+          fi
+
+          xdotool windowactivate --sync "$WID" || true
+          sleep 7
+          scrot -o "$GITHUB_WORKSPACE/assets/screenshots/tracker.png"
+
+          xdotool key --window "$WID" y
+          sleep 0.6
+          scrot -o "$GITHUB_WORKSPACE/assets/screenshots/instrument.png"
+
+          xdotool key --window "$WID" Up
+          sleep 0.2
+          xdotool key --window "$WID" Return
+          sleep 0.6
+          scrot -o "$GITHUB_WORKSPACE/assets/screenshots/effects.png"
+
+          cd "$GITHUB_WORKSPACE"
+          python3 - <<'PY'
+          import struct
+          from pathlib import Path
+
+          for name in ('tracker.png', 'instrument.png', 'effects.png'):
+              path = Path('assets/screenshots') / name
+              data = path.read_bytes()
+              assert data[:8] == b'\x89PNG\r\n\x1a\n', f'{name}: invalid PNG signature'
+              width, height = struct.unpack('>II', data[16:24])
+              assert (width, height) == (1280, 800), f'{name}: unexpected size {(width, height)}'
+          PY
+
+      - name: Replace screenshot placeholders
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          html_path = Path('index.html')
+          html = html_path.read_text()
+          start = html.index('      <section class="page-section" id="screenshots"')
+          end = html.index('      <section class="page-section" id="github"', start)
+          section = '''      <section class="page-section" id="screenshots" aria-labelledby="screenshots-heading">
+                <h2 id="screenshots-heading">Screenshots</h2>
+
+                <div class="screenshot-list">
+                  <figure class="screenshot">
+                    <img src="/assets/screenshots/tracker.png" alt="DeckTracker tracker view" width="1280" height="800" loading="lazy">
+                    <figcaption>Tracker view</figcaption>
+                  </figure>
+                  <figure class="screenshot">
+                    <img src="/assets/screenshots/instrument.png" alt="DeckTracker instrument editor" width="1280" height="800" loading="lazy">
+                    <figcaption>Instrument editing</figcaption>
+                  </figure>
+                  <figure class="screenshot">
+                    <img src="/assets/screenshots/effects.png" alt="DeckTracker instrument effects view" width="1280" height="800" loading="lazy">
+                    <figcaption>Effects</figcaption>
+                  </figure>
+                </div>
+              </section>
+
+          '''
+          html_path.write_text(html[:start] + section + html[end:])
+
+          css_path = Path('styles.css')
+          css = css_path.read_text()
+          css_start = css.index('.screenshot-list {')
+          css_end = css.index('.site-footer', css_start)
+          screenshot_css = '''.screenshot-list {
+            display: grid;
+            gap: 1.5rem;
+          }
+          .screenshot { margin: 0; }
+          .screenshot img {
+            display: block;
+            width: 100%;
+            height: auto;
+            border: 1px solid var(--line);
+          }
+          .screenshot figcaption {
+            margin-top: .4rem;
+            color: var(--muted);
+            font-size: .9rem;
+          }
+
+          '''
+          css_path.write_text(css[:css_start] + screenshot_css + css[css_end:])
+          PY
+
+          rm -f assets/screenshots/.gitkeep assets/screenshots/README.txt .capture-screenshots
+
+      - name: Commit screenshots and site update
+        run: |
+          set -euxo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html styles.css assets/screenshots .capture-screenshots
+          git commit -m 'Add DeckTracker software screenshots'
+          git push
