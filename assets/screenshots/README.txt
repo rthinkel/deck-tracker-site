@@ -1,0 +1,1 @@
+Screenshots in this directory are captured directly from the DeckTracker application at 1280x800.
