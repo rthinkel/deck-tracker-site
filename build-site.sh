@@ -23,6 +23,10 @@ mkdir -p "$OUT"
   tar \
     --exclude='./.git' \
     --exclude='./dist-site' \
+    --exclude='./node_modules' \
+    --exclude='./netlify' \
+    --exclude='./package.json' \
+    --exclude='./package-lock.json' \
     --exclude='./build-site.sh' \
     --exclude='./netlify.toml' \
     --exclude='./latest.json' \
